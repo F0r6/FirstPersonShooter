@@ -13,7 +13,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isSliding = false;
     private float crouchHeight = 1.0f;
     private float originalHeight;
-    private bool isCrouching= false;
+    public bool isCrouching = false;
 
     public float jumpHeight = 1.5f;
     public float gravity = -9.81f;
@@ -32,6 +32,7 @@ public class PlayerMovement : MonoBehaviour
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
 
+    private Vector3 lastPos;
     private Vector3 slideStartPosition;
 
 
@@ -81,6 +82,25 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = transform.right * x + transform.forward * z;
         controller.Move(move * currentSpeed * Time.deltaTime);
 
+        // Apply velocity
+        controller.Move(velocity * Time.deltaTime);
+
+
+        // Jump and Slide Mechanic
+        Jump();
+        CrouchSlide();
+
+        lastPos = controller.transform.position;
+
+        // Adjust movement speed while crouching
+        if (isCrouching)
+        {
+            currentSpeed = speed / 4f; // Adjust as needed
+        }
+    }
+
+    void Jump()
+    {
         // Jump logic
         if (Input.GetButtonDown("Jump") && canJump && (isGrounded || coyoteTimeCounter > 0f))
         {
@@ -106,18 +126,22 @@ public class PlayerMovement : MonoBehaviour
         {
             velocity.y += gravity * Time.deltaTime;
         }
+    }
 
-        // Apply velocity
-        controller.Move(velocity * Time.deltaTime);
-
+    void CrouchSlide()
+    {
         // Slide logic
-        if (Input.GetKeyDown(KeyCode.C) && !isSliding)
+        if (Input.GetKeyDown(KeyCode.C) && !isSliding && controller.transform.position != lastPos)
         {
             StartCoroutine(Slide());
         }
 
-        // Exit crouch logic
-        if (Input.GetKeyUp(KeyCode.C) && isCrouching)
+        // Crouching input detection
+        if (Input.GetKeyDown(KeyCode.C) && !isCrouching && controller.transform.position == lastPos)
+        {
+            StartCoroutine(EnterCrouch());
+        }
+        else if (!Input.GetKey(KeyCode.C) && isCrouching)
         {
             StartCoroutine(ExitCrouch());
         }
@@ -148,10 +172,28 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    private IEnumerator EnterCrouch()
+    {
+        float startTime = Time.time;
+        float duration = 0.1f; // Duration to reach crouch height, adjust as needed
+        isCrouching = true;
+
+        while (Time.time < startTime + duration)
+        {
+            float t = (Time.time - startTime) / duration;
+            controller.height = Mathf.Lerp(originalHeight, crouchHeight, t);
+            yield return null;
+        }
+
+        controller.height = crouchHeight;
+        
+    }
+
     private IEnumerator ExitCrouch()
     {
         float revertStartTime = Time.time;
-        float revertDuration = 0.3f; // Duration to revert height, adjust as needed
+        float revertDuration = 0.1f; // Duration to revert height, adjust as needed
+        isCrouching = false;
 
         while (Time.time < revertStartTime + revertDuration)
         {
@@ -161,7 +203,6 @@ public class PlayerMovement : MonoBehaviour
         }
 
         controller.height = originalHeight;
-        isCrouching = false;
     }
 
     void OnDrawGizmosSelected()
